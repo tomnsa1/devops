@@ -1,0 +1,572 @@
+1: Go to AWS console. click on All services, Click on Compute -->  Click on EC2
+
+2. Click on Launch instance. Choose an Amazon machine image (AMI), click next
+
+3. select Ubuntu Server 16.04 LTS (HVM), SSD Volume Type - ami-0552e3455b9bc8d50
+
+click next
+
+4. choose an instance type as t2.small, 2GB memory. click next
+
+
+5. Leave values to default in step 3 and step 4. click next
+
+
+6. enter tag name in step 5. Click to add a Name tag. it can be something like JenkinsEC2. click next:configure Security Group
+
+
+7. Click create new security group, give name as MyJenkinsSecurityGroup, add custom rule for 8080, 8090 , allow 0.0.0.0/0 as source IP
+
+8. Click on Review and launch
+
+9. Click on Launch
+
+Click on Launch
+
+10. Choose the existing key pair if you have one, otherwise create new one, give some name as my2019EC2Key. Make sure you download the key. Please do not give any space or any character in naming the key.
+
+11. Click on launch instance, Scroll down and click on view instances.
+
+
+
+
+
+
+
+Java
+sudo add-apt-repository ppa:webupd8team/java
+and press enter to continue
+
+sudo apt-get update
+
+
+ sudo apt-get install oracle-java8-installer -y
+— when the pop up comes, click OK 
+
+
+and say YES to accept to install by clicking left arrow button
+
+Once install java, enter the below command
+
+java -version
+#you should see something like
+
+java version "1.8.0_161"
+Java(TM) SE Runtime Environment (build 1.8.0_161-b12)
+Java HotSpot(TM) 64-Bit Server VM (build 25.161-b12, mixed mode)
+
+Now lets do Jenkins installation
+Jenkins (make sure you open port number - 8080 in security rules, edit inbound rules)
+
+wget -q -O - https://pkg.jenkins.io/debian/jenkins-ci.org.key | sudo apt-key add -
+
+
+echo deb http://pkg.jenkins.io/debian-stable binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list
+
+
+sudo apt-get update
+
+sudo apt-get install jenkins -y
+
+Now Go to AWS console. 
+  Click on EC2, click on running instances link. Select the checkbox of EC2 you are installing Java and Jenkins.
+
+  Click on Action.
+  Copy the value from step 4 that says --> Connect to your instance using its Public DNS: 
+
+
+Now go to browser. enter public dns name or public IP address with port no 8080.This is how to select public DNS name:
+
+http://EC2_public_dns_name:8080
+
+Unlock Jenkins 
+You may get screen, enter the below command in Git bash( Ubuntu console)
+
+sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+
+Copy the password and paste in the browser
+Click on install suggested plug-ins.
+
+Also create user name and password.
+enter everything as admin. at least user name as admin password as admin
+
+Click on Save and Finish. Click on Start to Use.
+
+Maven
+sudo apt install maven -y
+
+Tomcat Installation
+
+sudo apt-get update
+sudo apt-get install tomcat8 -y
+
+
+sudo apt-get install tomcat8-docs tomcat8-examples tomcat8-admin -y
+
+sudo cp -r /usr/share/tomcat8-admin/* /var/lib/tomcat8/webapps/ -v
+
+
+#Click on this link to know how to make changes using Vi editor.
+
+http://www.cidevops.com/2018/03/how-to-make-changes-in-linux-machine.html
+
+
+sudo vi /var/lib/tomcat8/conf/server.xml
+
+you need to scroll down by clicking down arrow button in this file change the port no from 8080 to 8090 at line starting with <Connector port="8080" protocol="HTTP/1.1"
+
+sudo vi /var/lib/tomcat8/conf/tomcat-users.xml
+
+Scroll down all the way to the end of the file, 
+Add the below lines in second last line above (above </tomcat-users>)
+<role rolename="manager-gui"/>
+<role rolename="manager-script"/>
+<user username="tomcat" password="password" roles="manager-gui,manager-script"/>
+
+
+
+sudo vi /etc/default/tomcat8
+Look for the line starting JAVA_OPTS and comment that line by adding #.
+ Add the below line:
+JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -Djava.awt.headless=true -Xmx512m -XX:MaxPermSize=512m -XX:+UseConcMarkSweepGC"
+
+
+sudo systemctl restart tomcat8
+
+sudo systemctl status tomcat8
+
+you may get message that says tomcat is active running.
+press q for quitting from that window.
+Now go to browser, copy public DNS 
+http://Ec2_public_dns_name:8090
+You should see a page that says It works!!!!
+
+
+HOW TO CREATE A JOB IN JENKINS
+
+1. Make sure you configure maven installation under Jenkins-->manage Jenkins-> Global Tool Configuration. under maven installation. enter Maven3 as name, enter path of maven installation --> /usr/share/maven and uncheck install automatically option.
+
+
+2. Also install SonarQube scanner,  deploy to container,  Jacoco plugins under Jenkins --> Manage Jenkins --> Manage plug-ins
+
+Click on Available, type Sonarqube, select SonarQube scanner. Click on Install without restart.
+
+SonarQube
+
+Deploy to container
+
+JaCoCo
+
+
+Click on without restart.
+
+
+steps to automate MyWebApp project in Jenkins:
+
+1. Login to Jenkins. Click on New item.
+
+2. Enter an item name --> select Free style project. enter name as myFirstAutomateJob. click OK.
+
+3. under source code mgmt, click git. enter bit bucket URL. go to Bitbucket, select repo you created from lab exercise # 2, click on Clone and select HTTPS Url.
+Copy it. Most importantly remove git clone from beginning of the URL.
+
+under credentials --> click Add- > select Jenkins -->  enter your bigbucket username and password
+
+4. select that from drop down.
+5. under build trigger click on poll scm, enter this value to check for every 2 mins --> H/02 * * * *
+
+
+6. Build --> Add build step --> invoke top level maven targets --> 
+
+
+
+
+select Maven3 from drop down and goal as clean install
+
+
+
+
+
+7. Click on advanced, enter the path of POM file as --> MyWebApp/pom.xml 
+#remember you have generated an Hello world file from mvn and pushed to your repository.
+
+
+
+
+8. add Post build action - select archive the artifacts
+
+
+
+
+enter the below value:(ignore if you get any error in red color)
+ **/*.war
+there may be some errors in red, but ignore it.
+
+
+
+9. click on Add post build action, select Record Jacoco Code coverage report
+
+
+
+  
+10. click on Add post build action, select deploy war/ear to container
+      enter the same value
+**/*.war
+
+in WAR/EAR files, leave context path empty
+
+   11. click on Add container , select Tomcat 8.x
+
+   12. click on add credentials, enter tomcat as user name and password as password.
+      select it from drop down.
+ 
+
+
+13. tomcat url should be http://localhost:8090
+
+click Apply, click Save
+
+
+click on build now..It should build. 
+
+if there is any error, please check the console output.
+Most of the common error would be checking the path of Maven installation, valid credentials for bitbucket or Tomcat. Also make sure you install the plug-ins.
+
+After successful deployment, please make sure you check the output in Tomcat by going to browser and enter below URL
+
+ http://please_change_per_public_dns_name_of_EC2:8090/MyWebApp
+
+You should see Hello World!!!
+
+
+
+
+How to install SonarQube on Ubuntu 16.0.4? Install Sonarqube on Ubuntu
+Please find steps for installing SonarQube on Ubuntu EC2. Make sure port 9000 is opened in security group(firewall rule).
+
+SonarQube is java based tool along with back end - back end can be MySQL, Oracle or PostgreSQL. We will use Postgres for set up on Ubuntu.
+
+Let us start with java install (skip java install if you already have it installed)
+
+1. Java steps 
+
+sudo apt-get update 
+sudo add-apt-repository ppa:webupd8team/java
+sudo apt-get update
+sudo apt-get install oracle-java8-installer -y
+
+— when the pop up comes, click OK and say YES to accept to install
+
+2. Postgres Installation
+
+1. sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ `lsb_release -cs`-pgdg main" >> /etc/apt/sources.list.d/pgdg.list'
+  
+2. sudo wget -q https://www.postgresql.org/media/keys/ACCC4CF8.asc -O - | sudo apt-key add -
+
+3. sudo apt-get -y install postgresql postgresql-contrib
+
+4. sudo systemctl start postgresql
+5. sudo systemctl enable postgresql
+
+Change the password for postgres user by entering below command
+6. sudo passwd postgres
+
+enter as admin (it wont display in screen though, thats fine)
+enter admin again for r-typing password
+
+Login as postgres user now
+7. su - postgres
+
+enter admin as password
+
+8. Now create a user below
+createuser sonar
+
+9. Switch to sql shell by entering 
+psql
+
+Execute the below three lines (one by one)
+
+ALTER USER sonar WITH ENCRYPTED password 'password';
+
+CREATE DATABASE sonar OWNER sonar;
+
+\q
+
+type exit to come out of postgres user.
+
+3. Now install SonarQube Web App
+
+sudo wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-6.4.zip
+
+
+sudo apt-get -y install unzip
+sudo unzip sonarqube-6.4.zip -d /opt
+
+sudo mv /opt/sonarqube-6.4 /opt/sonarqube -v
+
+sudo vi /opt/sonarqube/conf/sonar.properties
+uncomment the below lines by removing # and add values highlighted yellow
+sonar.jdbc.username=sonar
+sonar.jdbc.password=password
+
+Next, uncomment the below line, removing #
+sonar.jdbc.url=jdbc:postgresql://localhost/sonar
+
+Now press escape, and enter :wq! to come out of the above screen.
+
+Create Sonar as a service
+Execute the below command:
+sudo vi /etc/systemd/system/sonar.service
+
+add the below code in green color: 
+[Unit]
+Description=SonarQube service
+After=syslog.target network.target
+
+[Service]
+Type=forking
+
+ExecStart=/opt/sonarqube/bin/linux-x86-64/sonar.sh start
+ExecStop=/opt/sonarqube/bin/linux-x86-64/sonar.sh stop
+
+User=root
+Group=root
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+
+sudo systemctl enable sonar
+sudo systemctl start sonar
+sudo systemctl status sonar
+
+type q now to come out of this mode.
+Now execute the below command to see if Sonarqube is up and running. This may take a few minutes.
+
+tail -f /opt/sonarqube/logs/sonar.log
+
+Make sure you get the below message that says sonarqube is up..
+
+Now access sonarQube UI by going to browser and enter public dns name with port 9000
+Now to go to browser --> http://your_SonarQube_publicdns_name:9000/
+
+
+Here below are the steps for integrating SonarQube with Jenkins:
+Pre-requisites: Make sure SonarQube is up and running and do the below steps:
+Make sure Sonarqube plug-in installed in Jenkins
+
+1. You need to login to SonarQube using admin/admin and click on administration, security, users, click on Tokens, under generate token.
+Give some value for token name and click on generate. Copy the token.
+
+2. After installing SonarQube successfully, login to Jenkins. Manage Jenkins --> Configure System --> SonarQube installation 
+
+Enter name, URL as http://localhost:9000, paste the token you copied from step #1
+3. Click on Enable injection of Sonarqube server configuration.
+4. Save.
+5. Click on your existing free style job, click on configure. click on prepare Sonarqube scanner  environment.
+
+6. enter maven goal as clean install sonar:sonar
+
+
+7. click on save and build the job.
+
+You will see that Jenkins will integrate with Sonarqube which does code analysis of your project.
+Login to SonarQube, click on Projects to see the project dash board.
+
+
+How to enable SonarQube Scanner for PL/SQL files? - Code quality check for SQL files using SonarQube - Scan sql code using Sonar
+If you would like to enable scanning for PL/SQL files in SonarQube, there are both commercial and open source plug-ins available. Lets see how to enable open source plug-in for SonarQube. Useful information is below:
+
+https://github.com/felipebz/sonar-plsql
+
+Pre-requisites:
+SonarQube is already set up and running.
+
+Steps: (Execute this step on SonarQube instance)
+
+1. navigate to ${Sonar_Home}/extensions/plugins folder where you installed SonarQube:
+cd /opt/sonarqube/extensions/plugins 
+2. Download the plsql opensource plug-in from the above websites by executing below command:
+sudo wget https://github.com/felipebz/sonar-plsql/releases/download/2.0.0/sonar-plsql-open-plugin-2.0.0.jar
+3. Stop the Sonarqube scanner.
+sudo systemctl stop sonar
+4. Start the Sonarqube scanner.
+ sudo systemctl start sonar
+5. Make sure Sonarqube is up and running
+sudo systemctl status sonar
+
+once started, you should see below message 
+sonar.service - SonarQube service
+Loaded: loaded (/etc/systemd/system/sonar.service; enabled; vendor preset: enabled)
+Active: active (running) since Thu 2018-02-15 01:36:23 UTC; 
+6. If you don't see server is not starting, you might want to check the logs by executing: 
+cat /opt/sonarqube/logs/web.log  
+7. Now login to SonarQube, Navigate to Quality Profiles section, you should see PL/SQL rules added.
+
+
+
+HOW to install nexus
+
+How to setup SonaType Nexus 3 on Redhat Enterprise Linux in EC2? Nexus installation on RedHat Linux - Install Nexus on RedHat Linux
+ Here are the steps for installing Sonatype Nexus 3 in RHEL in EC2 on AWS. please create a new Redhat EC2 instance with small type. Choose Redhat Enterprise 7.6
+
+
+
+
+Pre-requisites: 
+Make sure you open port 8081 in AWS security group
+
+Installation Steps:
+
+sudo yum update -y
+
+sudo yum install wget -y
+
+
+
+
+
+
+
+Download Java
+sudo wget --no-check-certificate --no-cookies --header 'Cookie: oraclelicense=accept-securebackup-cookie' 'http://download.oracle.com/otn-pub/java/jdk/8u141-b15/336fa29ff2bb4ef291e347e091f7f4a7/jdk-8u141-linux-x64.rpm'
+
+
+
+
+Install Java
+
+
+
+
+
+
+
+
+
+
+sudo rpm -i jdk-8u141-linux-x64.rpm
+
+sudo /usr/sbin/alternatives --install /usr/bin/java java /usr/java/jdk1.8.0_141/bin/java 20000
+sudo /usr/sbin/alternatives --config java
+
+
+
+
+Choose option 2 by typing 2 and enter
+
+Execute the below command -  navigate to /opt directory by changing directory:
+cd /opt
+
+Download Nexus
+
+sudo wget https://sonatype-download.global.ssl.fastly.net/nexus/3/nexus-3.0.2-02-unix.tar.gz
+
+Extract Nexus
+
+sudo tar -xvf nexus-3.0.2-02-unix.tar.gz
+sudo mv nexus-3.0.2-02 nexus
+
+Create a user called Nexus
+sudo adduser nexus
+sudo chown -R nexus:nexus /opt/nexus
+sudo vi /opt/nexus/bin/nexus.rc
+change run_as_user="nexus"
+sudo vi /opt/nexus/bin/nexus.vmoptions
+
+Modify the above file as shown in red highlighted section:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-Xms256M
+-Xmx256M
+-XX:+UnlockDiagnosticVMOptions
+-XX:+UnsyncloadClass
+-Djava.net.preferIPv4Stack=true
+-Dkaraf.home=.
+-Dkaraf.base=.
+-Dkaraf.etc=etc
+-Djava.util.logging.config.file=etc/java.util.logging.properties
+-Dkaraf.data=/opt/nexus/nexus-data
+-Djava.io.tmpdir=data/tmp
+-Dkaraf.startLocalConsole=false
+
+after making changes, press wq! to come out of the file.
+
+ sudo ln -s /opt/nexus/bin/nexus /etc/init.d/nexus
+ sudo chkconfig --add nexus
+ sudo chkconfig --levels 345 nexus on
+ sudo service nexus start
+
+
+
+
+
+
+
+
+
+
+sudo service nexus status
+
+tail -f /opt/nexus/nexus-data/log/nexus.log
+
+
+You will see Nexus started..
+It should say Nexus is running..If you Nexus stopped, review the steps above.
+
+Once Nexus is successfully installed, you can access it in the browser by 
+ URL - http://public_dns_name:8081
+
+   with user name/password is admin/admin123
+
+you should see the home page of Nexus 
+
+
+Install Nexus Artifact Uploader plugin in Jenkins.
+
+
+
+Steps:
+
+1. Once you installed the above plug-ins, click existing FreeStyle job configuration or create a new job.
+
+2. Under source code management. enter bitbucket repo url and git credentials.
+
+3. Go to build section, add Maven targets. with goals clean install. Also click advance, give path of POM.xml
+
+
+
+
+
+4. click on Add build step, choose Nexus artifact uploader.
+
+
+
+
+5. Enter information per below screen shot.
+Make sure you enter version as 1.0-SNAPSHOT and repository as maven-snapshots
+
+6. Click on Apply, Save.
+
+
+
+
+7. Now login to Nexus repo, Click on Components, Click on maven-snapshots
+
+
+
+8. you shall see the WAR being uploaded here.
