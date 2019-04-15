@@ -1,0 +1,369 @@
+Jenkinsfile scripting
+
+node {
+
+    def mvnHome = tool 'mymaven1'
+    
+    stage ("checkout") {
+        checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '4747f337-a2af-416b-ab00-5d9ad50f5b28', url: 'https://juniornsa@bitbucket.org/juniornsa/newrepo.git']]])
+    }
+       stage ('build') {
+    sh "${mvnHome}/bin/mvn clean install -f Myownapp/pom.xml"
+    }
+    stage ('Code Quality scan') {
+       withSonarQubeEnv('SonarQube') {
+       sh "${mvnHome}/bin/mvn -f Myownapp/pom.xml sonar:sonar"
+        }
+    }
+     stage ('Code coverage') {
+       jacoco()
+   }
+   stage ('DEV Deploy')
+    {
+      echo "deploying to DEV tomcat "
+      sh 'sudo cp /var/lib/jenkins/workspace/$JOB_NAME/Myownapp/target/MyWebApp.war /var/lib/tomcat8/webapps'
+    }
+    stage ('DEV Approve')
+      {
+            echo "Taking approval from DEV"
+               
+            timeout(time: 7, unit: 'DAYS') {
+            input message: 'Do you want to deploy again?', submitter: 'admin'
+            }
+     }
+     stage ('Slack notification') 
+  {
+    slackSend(channel:'everyone', message: "Job is successful, here is the info -  Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+ 
+    }
+}
+
+
+
+Terraform instalation
+
+Terraform is used for provisioning infrastructure on Cloud. you don't need to create manually any resource
+
+Create a working directory
+sudo mkdir -p /opt/terraform
+cd /opt/terraform
+
+Download Terraform from Hasicorp website
+sudo wget https://releases.hashicorp.com/terraform/0.11.11/terraform_0.11.11_linux_amd64.zip
+sudo apt-get install unzip -y
+
+Unzip Terraform Zip file
+
+sudo unzip terraform_0.11.11_linux_amd64.zip
+
+Add terraform to PATH
+
+sudo vi ~/.bashrc
+   add below entry in the last line 
+   export PATH="/opt/terraform:$PATH"
+
+
+source ~/.bashrc
+
+terraform -version
+
+    this should show version of Terraform.
+
+    Terraform v0.11.11
+    
+    
+    
+Terraform can provision resources on any cloud platform. We will see how you can use Terraform to provision EC2 instance. Please do the below steps for provisioning EC2 instances on AWS:
+
+Login to AWS console, click on username and go to My security credentials.
+
+ Continue on security credentials, click on access keys
+
+
+
+Create a new access key if you don't have one. Make sure you download the keys in your local machine.
+
+Perform below commands in EC2 where you have installed Terraform:
+ 
+cd ~
+mkdir project-terraform
+cd project-terraform
+
+Create Terraform Files 
+sudo vi aws.tf
+
+copy the below code and fill xx with above access key and secret keys you have created.
+provider "aws" {
+  access_key = "xx"
+  secret_key = "xx"  
+  region     = "us-east-2"
+}
+
+Now execute the below command:
+terraform init
+* provider.aws: version = "~> 1.22"
+
+Terraform has been successfully initialized!
+
+sudo vi create_ec2.tf
+copy the below code in yellow color:
+
+
+resource "aws_instance" "myFirstInstrance" {
+  ami           = "ami-916f59f4"
+  count=1
+  key_name = "myKey"
+  instance_type = "t2.micro"
+  security_groups= [ "security_jenkins_port"]
+  tags {
+    Name = "jenkins_instance"
+  }
+
+}
+
+resource "aws_security_group" "security_jenkins_port" {
+  name        = "security_jenkins_port"
+  description = "security group for jenkins"
+
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+ ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+ # outbound from jenkis server
+  egress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags {
+    Name = "security_jenkins_port"
+  }
+}
+
+Execute the below command
+terraform plan
+the above command will show how many resources will be added.
+Plan: 2 to add, 0 to change, 0 to destroy.
+
+
+Execute the below command
+terraform apply
+Plan: 2 to add, 0 to change, 0 to destroy.
+
+Do you want to perform these actions?
+  Terraform will perform the actions described above.
+  Only 'yes' will be accepted to approve.
+
+  Enter a value: yes
+
+Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
+
+Now login to EC2 console, to see the new instances up and running.
+
+
+Create SonarQube instance using Terraform - Setup SonarQube instance using Terraform
+Execute the below command after login to EC2 where you installed Terraform:
+ 
+1. sudo vi sonar.tf  
+
+2. Copy the below content with green background:
+
+Change the key name marked red below per your key name:
+
+ resource "aws_security_group" "security_sonar" {
+      name        = "security_sonar"
+      description = "security group for Sonar"
+
+      ingress {
+        from_port   = 9000
+        to_port     = 9000
+        protocol    = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+      }
+
+     ingress {
+        from_port   = 22
+        to_port     = 22
+        protocol    = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+      }
+
+     # outbound from Sonar server
+      egress {
+        from_port   = 0
+        to_port     = 65535
+        protocol    = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+      }
+
+      tags {
+        Name = "security_sonar"
+      }
+    }
+
+
+    resource "aws_instance" "myFirstInstrance_sonar" {
+      ami           = "ami-916f59f4"
+
+      key_name = "myOctEc2Key"
+      instance_type = "t2.micro"
+      security_groups= [ "security_sonar"]
+      tags {
+        Name = "sonar_instance"
+      }
+    }
+
+3.  execute below command:
+    terraform plan
+4. and then
+    terraform apply
+
+Now you will see a new instance being created in AWS console.
+
+
+ANSIBLE
+
+How to Install Ansible on Ubuntu 16.0.4 instance?
+Here are the steps for installing Ansible on Ubuntu 16.0.4 instance:
+The best way to install Ansible for Ubuntu is to add the project's PPA (personal package archive) to your system. you can do it by executing the below command:
+
+
+Update Repository
+sudo apt-add-repository -y ppa:ansible/ansible
+then you need to refresh the package by executing the below command:
+sudo apt-get update
+
+Now you can install Ansible: 
+sudo apt-get install -y ansible
+sudo apt install python-pip -y
+ ( this is just comment -  Package manager for python)
+
+Install Boto Framework
+sudo pip install boto
+(This is AWS SDK for python) 
+sudo pip install boto3 
+sudo apt-get install python-boto -y
+pip list boto | grep boto
+ (the above command should display below output
+boto (2.49.0)
+boto3 (1.9.71)
+botocore (1.12.71)
+After installing execute the below command
+ansible --version
+
+you will see this output..
+
+ansible 2.7.7
+  config file = /etc/ansible/ansible.cfg
+  configured module search path = [u'/home/ubuntu/.ansible/plugins/modules', u'/usr/share/ansible/plugins/modules']
+  ansible python module location = /usr/lib/python2.7/dist-packages/ansible
+  executable location = /usr/bin/ansible
+  python version = 2.7.12 (default, Dec  4 2017, 14:50:18) [GCC 5.4.0 20160609]
+
+
+
+Ansible playbook for Java Installation on Nodes
+1. Login to Ansible management server/machine. Create SSH keys in Ansible host machine by executing the below command: (if you already have keys created, please skip this step)
+ssh-keygen 
+
+enter three times..now you will see keys successfully created.
+2.  Execute the below command on Ansible management node and copy the public key content:
+ sudo cat ~/.ssh/id_rsa.pub
+
+copy the above output.
+3. Now login to target node, execute the below command to open the file
+ sudo vi /home/ubuntu/.ssh/authorized_keys
+type shift A and then enter now  
+    and paste the key in the above file. please do not delete any existing values in this file.
+
+4. go back to ansible mgmt node, make sure you are able to ssh from ansible mgmt node after copying the keys above:
+  ssh private_ip_of_target_node
+now type exit to come out of the target node.
+5. Now in ansible mgmt node, now make changes in /etc/ansible/hosts file to include the node you will be installing software. Make sure you add public IP address as highlighted below in red color:
+   sudo vi /etc/ansible/hosts
+[Java_Group]   
+xx.xx.xx.xx ansible_ssh_user=ubuntu ansible_ssh_private_key_file=~/.ssh/id_rsa  ansible_python_interpreter=/usr/bin/python3
+
+6. make changes in playbooks as given below,
+cd ~/playbooks
+
+
+sudo vi installJava.xml
+
+---
+- hosts: Java_Group
+  tasks:
+
+  - name: Update APT package manager repositories cache
+    become: true
+    apt:
+      update_cache: yes
+
+  - name: Install Python software prereequesits
+    become: yes
+    apt: name=python-software-properties
+
+  - name: Install add-apt-repostory
+    sudo: yes
+    apt: name=software-properties-common state=latest
+
+  - name: Add Oracle Java Repository
+    become: yes
+    apt_repository: repo='ppa:webupd8team/java'
+
+  - name: Accept Java 8 License
+    become: yes
+    debconf: name='oracle-java8-installer' question='shared/accepted-oracle-license-v1-1' value='true' vtype='select'
+
+  - name: Install Oracle Java 8
+    become: yes
+    apt: name={{item}} state=latest
+    with_items:
+      - oracle-java8-installer
+      - ca-certificates
+      - oracle-java8-set-default
+
+7. Execute Ansible playbook
+sudo ansible-playbook installJava.xml
+
+now after successfully executing, enter below command to make sure Java is installed in target node:
+
+java -version
+
+
+Note:
+
+If you have issues in installing Java on target node, please do the following on target node to install python modules:
+
+sudo apt-get update
+sudo apt-get install python-software-properties
+
+
+Install Maven using Ansible playbook on Ubuntu - Install Maven on Ubuntu using Ansible playbook
+Playbook for installing Maven on Ubuntu using Ansible Playbook
+
+sudo vi installMaven.xml
+---
+- hosts: Java_Group
+  tasks:
+    - name: install maven on your local Ubuntu machine
+      become: yes
+      apt: pkg={{ item }} state=latest update_cache=yes cache_valid_time=3600
+      with_items:
+        - maven
+
+
+sudo ansible-playbook installMaven.xml
+
